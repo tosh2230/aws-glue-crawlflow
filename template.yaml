@@ -1,0 +1,161 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  glue-crawlflow
+
+Resources:
+  ########################################
+  # Lambda (for Queuing)
+  ########################################
+  FunctionEnqueueGlueCrawlflow:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: enqueue_glue_crawlflow
+      CodeUri: src/enqueue/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.7
+      MemorySize: 128
+      Tracing: Active
+      Timeout: 15
+      Environment:
+        Variables: 
+          QUEUE_URL: !Ref QueueGlueCrawlflow
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+            Resource: !GetAtt QueueGlueCrawlflow.Arn
+
+  ########################################
+  # SQS
+  ########################################
+  QueueGlueCrawlflow:
+    Type: AWS::SQS::Queue
+    Properties: 
+      QueueName: queue_glue_crawlflow
+      DelaySeconds: 0
+      ReceiveMessageWaitTimeSeconds: 20
+      VisibilityTimeout: 180
+
+  ########################################
+  # Lambda (for Executing StateMachine)
+  ########################################
+  FunctionRunGlueCrawlflow:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: run_glue_crawlflow
+      CodeUri: src/run_step_functions/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.7
+      MemorySize: 128
+      Tracing: Active
+      Timeout: 30
+      Environment:
+        Variables: 
+          STATEMACHINE_ARN: !Ref StateMachineGlueCrawlflow
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - states:StartExecution
+            Resource: !Ref StateMachineGlueCrawlflow
+      Events:
+        EventSQS:
+          Type: SQS
+          Properties:
+            BatchSize: 1
+            Enabled: True
+            Queue: !GetAtt QueueGlueCrawlflow.Arn
+
+  ########################################
+  # Step Functions
+  ########################################
+  StateMachineGlueCrawlflow:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: glue_crawlflow
+      DefinitionUri: statemachine/glue_crawlflow.asl.json
+      DefinitionSubstitutions:
+        FunctionCheckCrawlerArn: !GetAtt FunctionCheckCrawler.Arn
+        FunctionRunCrawlerArn: !GetAtt FunctionRunCrawler.Arn
+        FunctionAddCountArn: !GetAtt FunctionAddCount.Arn
+      Logging: 
+        Destinations: 
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt LogGroupGlueCrawlflow.Arn
+        IncludeExecutionData: True
+        Level: ALL
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref FunctionCheckCrawler
+        - LambdaInvokePolicy:
+            FunctionName: !Ref FunctionRunCrawler
+        - LambdaInvokePolicy:
+            FunctionName: !Ref FunctionAddCount
+        - !Ref StepFunctionsLogPolicy
+
+  LogGroupGlueCrawlflow:
+    Type: AWS::Logs::LogGroup
+    Properties: 
+      LogGroupName: /aws/stepfunctions/glue_crawlflow
+
+  FunctionCheckCrawler:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: glue_crawlflow_check_crawler
+      CodeUri: src/check_crawler/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.7
+      MemorySize: 128
+      Tracing: Active
+      Timeout: 30
+      Policies:
+        - AWSGlueServiceRole
+
+  FunctionRunCrawler:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: glue_crawlflow_run_crawler
+      CodeUri: src/run_crawler/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.7
+      MemorySize: 128
+      Tracing: Active
+      Timeout: 30
+      Policies:
+        - AWSGlueServiceRole
+
+  FunctionAddCount:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: glue_crawlflow_add_count
+      CodeUri: src/add_count/
+      Handler: lambda_function.lambda_handler
+      Runtime: python3.7
+      MemorySize: 128
+      Tracing: Active
+      Timeout: 30
+
+  ########################################
+  # IAM
+  ########################################
+  StepFunctionsLogPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogDelivery
+              - logs:GetLogDelivery
+              - logs:UpdateLogDelivery
+              - logs:DeleteLogDelivery
+              - logs:ListLogDeliveries
+              - logs:PutResourcePolicy
+              - logs:DescribeResourcePolicies
+              - logs:DescribeLogGroups
+            Resource: "*"

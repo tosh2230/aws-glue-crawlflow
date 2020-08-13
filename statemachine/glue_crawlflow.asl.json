@@ -1,0 +1,189 @@
+{
+    "Comment": "This state machine is for running glue crawler.",
+    "StartAt": "CheckCrawlerFirst",
+    "States": {
+        "CheckCrawlerFirst": {
+            "Type": "Task",
+            "Resource": "${FunctionCheckCrawlerArn}",
+            "InputPath": "$",
+            "ResultPath": "$.CheckResult",
+            "OutputPath": "$",
+            "Retry": [{
+                "ErrorEquals": ["Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 30,
+                "MaxAttempts": 5,
+                "BackoffRate": 2.0
+            }],
+            "Catch": [
+                {
+                    "ErrorEquals": ["CrawlerThrottlingException"],
+                    "ResultPath": "$.CatchResult",
+                    "Next": "WaitCheckingFirst"
+                }
+            ],
+            "Next": "CheckStatusFirst"
+        },
+        "WaitCheckingFirst": {
+            "Type": "Wait",
+            "Seconds": 15,
+            "Next": "CheckCrawlerFirst"
+        },
+        "CheckStatusFirst": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "Variable": "$.CheckResult.CrawlerState",
+                    "StringEquals": "READY",
+                    "Next": "RunCrawler"
+                }
+            ],
+            "Default": "AlreadyRunning"
+        },
+        "RunCrawler": {
+            "Type": "Task",
+            "Resource": "${FunctionRunCrawlerArn}",
+            "InputPath": "$",
+            "ResultPath": "$.RunResult",
+            "OutputPath": "$",
+            "Retry": [{
+                "ErrorEquals": ["Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 30,
+                "MaxAttempts": 5,
+                "BackoffRate": 2.0
+            }],
+            "Catch": [
+                {
+                    "ErrorEquals": ["CrawlerThrottlingException"],
+                    "ResultPath": "$.CatchResult",
+                    "Next": "WaitExecuting"
+                },
+                {
+                    "ErrorEquals": ["CrawlerRunningException"],
+                    "ResultPath": "$.CatchResult",
+                    "Next": "AlreadyRunning"
+                }
+            ],
+            "Next": "WaitRunning"
+        },
+        "WaitExecuting": {
+            "Type": "Wait",
+            "Seconds": 15,
+            "Next": "RunCrawler"
+        },
+        "WaitRunning": {
+            "Type": "Wait",
+            "SecondsPath": "$.WaitTime",
+            "Next": "CheckCrawler"
+        },
+        "CheckCrawler": {
+            "Type": "Task",
+            "Resource": "${FunctionCheckCrawlerArn}",
+            "InputPath": "$",
+            "ResultPath": "$.CheckResult",
+            "OutputPath": "$",
+            "Retry": [{
+                "ErrorEquals": ["Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 15,
+                "MaxAttempts": 5,
+                "BackoffRate": 2.0
+            }],
+            "Catch": [
+                {
+                    "ErrorEquals": ["CrawlerThrottlingException"],
+                    "ResultPath": "$.CatchResult",
+                    "Next": "WaitChecking"
+                }
+            ],
+            "Next": "CheckStatus"
+        },
+        "WaitChecking": {
+            "Type": "Wait",
+            "Seconds": 15,
+            "Next": "CheckCrawler"
+        },
+        "CheckStatus": {
+            "Type": "Choice",
+            "Choices": [
+                {
+                    "And":[
+                        {
+                            "Variable": "$.CheckResult.CrawlerState",
+                            "StringEquals": "READY"
+                        },
+                        {
+                            "Variable": "$.CheckResult.LastCrawlStatus",
+                            "StringEquals": "SUCCEEDED"
+                        }
+                    ],
+                    "Next": "Succeed"
+                },{
+                    "And":[
+                        {
+                            "Variable": "$.CheckResult.CrawlerState",
+                            "StringEquals": "READY"
+                        },
+                        {
+                            "Variable": "$.CheckResult.LastCrawlStatus",
+                            "StringEquals": "CANCELLED"
+                        }
+                    ],
+                    "Next": "Cancelled"
+                },{
+                    "And":[
+                        {
+                            "Variable": "$.CheckResult.CrawlerState",
+                            "StringEquals": "READY"
+                        },
+                        {
+                            "Variable": "$.CheckResult.LastCrawlStatus",
+                            "StringEquals": "FAILED"
+                        }
+                    ],
+                    "Next": "Failed"
+                }
+            ],
+            "Default": "AddCount"
+        },
+        "AddCount": {
+            "Type": "Task",
+            "Resource": "${FunctionAddCountArn}",
+            "InputPath": "$",
+            "ResultPath": "$.CheckCount",
+            "OutputPath": "$",
+            "Retry": [{
+                "ErrorEquals": ["Lambda.TooManyRequestsException"],
+                "IntervalSeconds": 15,
+                "MaxAttempts": 5,
+                "BackoffRate": 2.0
+            }],
+            "Next": "CheckCount"
+        },
+        "CheckCount": {
+            "Type": "Choice",
+            "Choices": [{
+                "Variable": "$.CheckCount",
+                "NumericGreaterThan": 30,
+                "Next": "Timeout"
+            }],
+            "Default": "WaitRunning"
+        },
+        "Succeed": {
+            "Type": "Succeed"
+        },
+        "AlreadyRunning": {
+            "Type": "Succeed"
+        },
+        "Failed": {
+            "Type": "Fail",
+            "Cause": "Failed to Running Glue Crawler"
+        },
+        "Cancelled": {
+            "Type": "Fail",
+            "Cause": "Cancelled Glue Crawler"
+        },
+        "Timeout": {
+            "Type": "Fail",
+            "Cause": "Failed by Timeout"
+        }
+    }
+}
