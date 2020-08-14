@@ -8,7 +8,7 @@ AWS Services what to be called are below.
 
 - AWS Lambda
 - Amazon SQS
-- Amazon Step Functions
+- AWS Step Functions
 - AWS Glue
 
 ![aws-glue-crawlflow](https://github.com/tosh223/aws-glue-crawlflow/blob/master/drawio/aws-glue-crawlflow.svg)
