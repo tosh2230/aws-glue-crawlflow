@@ -77,7 +77,8 @@ Resources:
     Type: AWS::Serverless::StateMachine
     Properties:
       Name: glue_crawlflow
-      DefinitionUri: statemachine/glue_crawlflow.asl.json
+      # DefinitionUri: statemachine/glue_crawlflow.asl.json
+      DefinitionUri: statemachine/glue_crawlflow.asl.yaml
       DefinitionSubstitutions:
         FunctionCheckCrawlerArn: !GetAtt FunctionCheckCrawler.Arn
         FunctionRunCrawlerArn: !GetAtt FunctionRunCrawler.Arn
