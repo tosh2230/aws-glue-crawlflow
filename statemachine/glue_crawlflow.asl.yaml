@@ -9,6 +9,10 @@ States:
     ResultPath: $.CheckResult
     OutputPath: $
     Retry:
+      - ErrorEquals: [ "Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException" ]
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
       - ErrorEquals:
           - Lambda.TooManyRequestsException
         IntervalSeconds: 30
@@ -38,6 +42,10 @@ States:
     ResultPath: $.RunResult
     OutputPath: $
     Retry:
+      - ErrorEquals: [ "Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException" ]
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
       - ErrorEquals:
           - Lambda.TooManyRequestsException
         IntervalSeconds: 30
@@ -68,6 +76,10 @@ States:
     ResultPath: $.CheckResult
     OutputPath: $
     Retry:
+      - ErrorEquals: [ "Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException" ]
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
       - ErrorEquals:
           - Lambda.TooManyRequestsException
         IntervalSeconds: 15
@@ -112,6 +124,10 @@ States:
     ResultPath: $.CheckCount
     OutputPath: $
     Retry:
+      - ErrorEquals: [ "Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException" ]
+        IntervalSeconds: 2
+        MaxAttempts: 6
+        BackoffRate: 2
       - ErrorEquals:
           - Lambda.TooManyRequestsException
         IntervalSeconds: 15
